@@ -95,11 +95,35 @@ export function exportWorkloadsToCSV(workloads: WorkloadCapacityData[], filename
   // Add BOM for proper UTF-8 handling in Excel
   const BOM = '\uFEFF';
   const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+  const blobUrl = URL.createObjectURL(blob);
 
-  const defaultName = `k8s-capacity-report-${new Date().toISOString().slice(0, 10)}.csv`;
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = filename || defaultName;
-  link.click();
-  URL.revokeObjectURL(link.href);
+  console.log('[CSV Export] Generated CSV with', workloads.length, 'rows,', headers.length, 'columns');
+
+  // Use window.open for CSP-compatible download in Dynatrace AppEngine iframes
+  const newWindow = window.open(blobUrl, '_blank');
+
+  if (newWindow) {
+    // Clean up blob URL after download starts
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+  } else {
+    // Fallback: if popup blocked, copy CSV to clipboard
+    console.log('[CSV Export] Popup blocked, falling back to clipboard');
+    URL.revokeObjectURL(blobUrl);
+    navigator.clipboard.writeText(csvContent).then(() => {
+      alert('CSV copied to clipboard! Paste into a text file and save as .csv to open in Excel.');
+    }).catch(() => {
+      // Last resort: try anchor download approach
+      const link = document.createElement('a');
+      const fallbackUrl = URL.createObjectURL(blob);
+      link.href = fallbackUrl;
+      link.download = filename || `k8s-capacity-report-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(fallbackUrl);
+      }, 1000);
+    });
+  }
 }

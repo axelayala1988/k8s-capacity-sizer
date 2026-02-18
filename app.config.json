@@ -3,7 +3,7 @@
   "app": {
     "id": "my.k8s.capacity.sizer",
     "name": "K8s Capacity Sizer",
-    "version": "1.10.0",
+    "version": "1.10.1",
     "description": "Right-size K8s workloads: requests/limits vs actual usage",
     "scopes": [
       {
