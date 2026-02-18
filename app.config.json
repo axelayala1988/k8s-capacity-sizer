@@ -1,0 +1,33 @@
+{
+  "environmentUrl": "https://yhu28601.apps.dynatrace.com",
+  "app": {
+    "id": "my.k8s.capacity.sizer",
+    "name": "K8s Capacity Sizer",
+    "version": "1.10.0",
+    "description": "Right-size K8s workloads: requests/limits vs actual usage",
+    "scopes": [
+      {
+        "name": "storage:metrics:read",
+        "comment": "Read Kubernetes container metrics from Grail"
+      },
+      {
+        "name": "storage:entities:read",
+        "comment": "Read Kubernetes entity data"
+      },
+      {
+        "name": "environment-api:metrics:read",
+        "comment": "Read metrics via classic Metrics API v2 for metric discovery"
+      }
+    ],
+    "icon": "src/assets/app_icon.png",
+    "selfMonitoringAgent": ""
+  },
+  "server": {
+    "port": 3000,
+    "host": "127.0.0.1",
+    "showWarnings": true
+  },
+  "build": {
+    "sourceRoot": "."
+  }
+}

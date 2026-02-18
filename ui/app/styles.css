@@ -1,0 +1,96 @@
+/* K8s Capacity Sizer - Dark Theme Styles */
+
+/* CSS Variables - Dynatrace Dark Theme */
+:root {
+  --dt-colors-background-base-default: #1b1c2e;
+  --dt-colors-background-container-default: #25273d;
+  --dt-colors-background-input-default: #1b1c2e;
+  --dt-colors-text-neutral-default: #f0f0f5;
+  --dt-colors-text-neutral-subdued: #b4b4be;
+  --dt-colors-border-neutral-default: #3d3f5c;
+  --dt-colors-text-critical-default: #ee3d48;
+  --dt-colors-status-optimal: #4caf50;
+  --dt-colors-status-warning: #ff9800;
+  --dt-colors-status-critical: #ee3d48;
+  --dt-colors-status-info: #3d8bfd;
+}
+
+/* Global Styles */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #1b1c2e;
+  color: #f0f0f5;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+#root {
+  background-color: #1b1c2e;
+  min-height: 100vh;
+}
+
+/* Force all text to be visible */
+h1, h2, h3, h4, h5, h6 {
+  color: #f0f0f5 !important;
+}
+
+p, span, div {
+  color: inherit;
+}
+
+/* Button reset for custom buttons */
+button {
+  font-family: inherit;
+}
+
+/* Select dropdown styling */
+select {
+  font-family: inherit;
+}
+
+select:focus {
+  border-color: #3d8bfd !important;
+  outline: none;
+}
+
+select option {
+  background-color: #25273d;
+  color: #f0f0f5;
+}
+
+/* Scrollbar styling for dark theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1b1c2e;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3d3f5c;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #5a5d7a;
+}
+
+/* Strato component overrides for dark theme */
+[class*="strato"] {
+  color: #f0f0f5 !important;
+}
+
+/* Ensure Flex and Container backgrounds don't get overridden */
+div[class*="grid"],
+div[class*="Grid"],
+div[class*="flex"],
+div[class*="Flex"] {
+  background-color: transparent !important;
+}

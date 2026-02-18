@@ -1,0 +1,44 @@
+{
+  "name": "k8s-capacity-sizer",
+  "version": "1.0.0",
+  "description": "Right-size Kubernetes workloads by comparing configured requests/limits against actual usage",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "dt-app dev",
+    "build": "dt-app build",
+    "deploy": "dt-app deploy",
+    "generate": "dt-app generate",
+    "lint": "eslint . --ext .ts,.tsx",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dynatrace-sdk/app-environment": "^1.0.0",
+    "@dynatrace-sdk/app-utils": "^1.0.0",
+    "@dynatrace-sdk/client-classic-environment-v2": "^4.2.1",
+    "@dynatrace-sdk/client-query": "^1.0.0",
+    "@dynatrace-sdk/navigation": "^2.1.1",
+    "@dynatrace-sdk/units": "^1.0.0",
+    "@dynatrace/strato-components": "^1.0.0",
+    "@dynatrace/strato-components-preview": "^2.4.1",
+    "@dynatrace/strato-design-tokens": "^1.0.0",
+    "@dynatrace/strato-icons": "^1.0.0",
+    "react-intl": "^6.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "dt-app": "^1.0.2",
+    "eslint": "^8.57.0",
+    "eslint-plugin-react": "^7.34.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
