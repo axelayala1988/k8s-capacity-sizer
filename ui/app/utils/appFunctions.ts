@@ -97,3 +97,28 @@ export async function queryWorkloadMetrics(params: {
     };
   }
 }
+
+/**
+ * Query workload-level capacity data using new Grail metrics (dt.kubernetes.*).
+ * Uses DQL timeseries queries for direct workload-level aggregation.
+ */
+export async function queryWorkloadMetricsGrail(params: {
+  from?: string;
+  cluster?: string;
+  namespace?: string;
+  limit?: number;
+}): Promise<WorkloadMetricsResult> {
+  try {
+    const response = await functions.call('query-workload-metrics-grail', {
+      data: params,
+    });
+    return await response.json() as WorkloadMetricsResult;
+  } catch (error) {
+    console.error('Failed to call query-workload-metrics-grail function:', error);
+    return {
+      success: false,
+      data: [],
+      errors: [error instanceof Error ? error.message : 'Unknown error'],
+    };
+  }
+}

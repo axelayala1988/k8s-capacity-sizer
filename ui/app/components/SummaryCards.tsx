@@ -24,6 +24,14 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({ summary, loading }) 
       color: '#f0f0f5',
     },
     {
+      title: 'No Limits Set',
+      value: loading ? '...' : summary.noConfigCount,
+      subtitle: summary.noConfigCount > 0
+        ? 'Running without safety nets!'
+        : 'All workloads have limits',
+      color: summary.noConfigCount > 0 ? '#ee3d48' : '#4caf50',
+    },
+    {
       title: 'Over-Provisioned',
       value: loading ? '...' : summary.overProvisionedCount,
       subtitle: 'Wasting resources',

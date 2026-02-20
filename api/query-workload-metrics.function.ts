@@ -4,6 +4,7 @@ import { queryExecutionClient } from '@dynatrace-sdk/client-query';
 interface QueryPayload {
   from?: string;
   namespace?: string;
+  limit?: number; // Max workloads to return (for large environments)
 }
 
 interface WorkloadRow {
@@ -80,17 +81,27 @@ async function runDQL(query: string): Promise<Record<string, any>[]> {
 // ── Main Function ───────────────────────────────────────────────────────
 
 export default async function (payload: QueryPayload) {
-  const { from: rawFrom = 'now()-24h', namespace } = payload || {};
+  const { from: rawFrom = 'now()-24h', namespace, limit = 200 } = payload || {};
   const metricsFrom = rawFrom.replace('now()', 'now');
 
   const errors: string[] = [];
   const diagnostics: string[] = [];
 
-  // ── Step 1: Discover available K8s container metrics ──────────────
+  // ── Step 1: Discover available K8s metrics (workload + container level) ──────
   const metricKeys: Array<{ key: string; name: string; unit: string }> = [];
   const seenKeys = new Set<string>();
 
-  for (const term of ['kubernetes container', 'containers cpu', 'containers memory', 'containers.cpu', 'containers.memory']) {
+  // Search for both workload-level and container-level metrics
+  for (const term of [
+    'kubernetes workload',
+    'cloud.kubernetes.workload',
+    'builtin:cloud.kubernetes',
+    'kubernetes container',
+    'containers cpu',
+    'containers memory',
+    'containers.cpu',
+    'containers.memory'
+  ]) {
     try {
       const result = await metricsClient.allMetrics({
         text: term,
@@ -113,13 +124,24 @@ export default async function (payload: QueryPayload) {
 
   diagnostics.push('Discovered ' + metricKeys.length + ' metric keys');
 
-  // ── Step 2: Identify the 6 needed container-level metrics ─────────
-  // Only match keys containing "containers." to exclude node/pod-level metrics.
+  // Separate workload-level vs container-level metrics
+  const workloadMetrics = metricKeys.filter(m =>
+    m.key.includes('workload') || m.key.includes('cloud_application')
+  );
   const containerMetrics = metricKeys.filter(m => m.key.includes('containers.'));
+
+  diagnostics.push('Workload-level metrics: ' + workloadMetrics.length);
+  diagnostics.push('Container-level metrics: ' + containerMetrics.length);
+  if (workloadMetrics.length > 0) {
+    diagnostics.push('Workload metric keys: ' + JSON.stringify(workloadMetrics.map(m => m.key)));
+  }
+
+  // ── Step 2: Identify the 6 needed metrics (prefer workload-level) ─────────
+  const availableMetrics = workloadMetrics.length > 0 ? workloadMetrics : containerMetrics;
 
   function findKey(...patterns: string[]): { key: string; unit: string } | null {
     for (const p of patterns) {
-      const found = containerMetrics.find(m => m.key.toLowerCase().includes(p.toLowerCase()));
+      const found = availableMetrics.find(m => m.key.toLowerCase().includes(p.toLowerCase()));
       if (found) return { key: found.key, unit: found.unit };
     }
     return null;
@@ -284,13 +306,15 @@ export default async function (payload: QueryPayload) {
     if (r.id && r['entity.name']) entityIdToEntityName.set(r.id, r['entity.name']);
   }
   diagnostics.push('CGI entities: ' + cgiEntities.length);
-  // Show a sample entity name for debugging
+  // Show samples for debugging
   if (cgiEntities.length > 0) {
+    diagnostics.push('CGI ID sample: "' + (cgiEntities[0].id || '') + '"');
     diagnostics.push('CGI name sample: "' + (cgiEntities[0]['entity.name'] || '') + '"');
   }
 
   // ── Step 5: Query metrics splitBy entity dimension ────────────────
   const workloadMap = new Map<string, WorkloadRow>();
+  const seenEntityIds = new Set<string>(); // Track unique entity IDs from metrics
 
   async function queryMetric(
     metricKey: string | null,
@@ -315,6 +339,9 @@ export default async function (payload: QueryPayload) {
               const entityId =
                 (dp.dimensionMap && dp.dimensionMap[entityDim]) ||
                 (dp.dimensions && dp.dimensions[0]) || '';
+
+              // Track entity IDs for diagnostic purposes
+              if (entityId && seenEntityIds.size < 5) seenEntityIds.add(entityId);
 
               // Resolve entity ID → entity name → workload name
               const entityName = entityIdToEntityName.get(entityId) || entityId;
@@ -387,16 +414,49 @@ export default async function (payload: QueryPayload) {
     diagnostics.push('Converted memory percentage to bytes using limits');
   }
 
+  // Add entity ID diagnostics
+  if (seenEntityIds.size > 0) {
+    diagnostics.push('Metric entity IDs sample: ' + JSON.stringify(Array.from(seenEntityIds)));
+    diagnostics.push('Entity map has ' + entityIdToEntityName.size + ' entries');
+    // Check if any metric entity IDs match map keys
+    let matchCount = 0;
+    for (const id of seenEntityIds) {
+      if (entityIdToEntityName.has(id)) matchCount++;
+    }
+    diagnostics.push('Match rate: ' + matchCount + '/' + seenEntityIds.size + ' metric entity IDs found in DQL map');
+  }
+
   // Filter by namespace
   const filtered = namespace
     ? data.filter(d => d.namespace === namespace || d.namespace === 'unknown')
     : data;
 
-  diagnostics.push('Workloads with data: ' + filtered.length);
+  // Apply result limit for large environments (prevents response size limit errors)
+  const totalWorkloads = filtered.length;
+  const limited = filtered.slice(0, limit);
+  const wasTruncated = limited.length < totalWorkloads;
+
+  diagnostics.push(`Workloads with data: ${totalWorkloads}${wasTruncated ? ` (returning first ${limit})` : ''}`);
+  if (wasTruncated) {
+    errors.push(`TRUNCATED: Showing ${limit} of ${totalWorkloads} workloads. Select a specific namespace to see fewer results.`);
+  }
+
+  // In production mode (large environments), only return essential data
+  // Include diagnostics only if there are errors or no data
+  // TEMPORARY: Always include debug info to troubleshoot entity resolution
+  const includeDebugInfo = true; // errors.length > 0 || limited.length === 0;
 
   return {
-    success: true, data: filtered, discoveredKeys: keys,
-    allMetricKeys: metricKeys.map(m => m.key).sort(),
-    diagnostics, errors,
+    success: true,
+    data: limited,
+    errors,
+    totalCount: totalWorkloads,
+    returnedCount: limited.length,
+    // Only include heavy diagnostic data if needed
+    ...(includeDebugInfo ? {
+      discoveredKeys: keys,
+      allMetricKeys: metricKeys.map(m => m.key).sort(),
+      diagnostics,
+    } : {}),
   };
 }

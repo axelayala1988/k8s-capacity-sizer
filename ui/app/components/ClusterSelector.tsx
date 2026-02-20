@@ -33,6 +33,11 @@ export const ClusterSelector: React.FC<ClusterSelectorProps> = ({
           outline: 'none',
         }}
       >
+        {selected === '' && (
+          <option value="" disabled>
+            {loading ? 'Loading clusters...' : 'Select a cluster'}
+          </option>
+        )}
         <option value="all">All clusters</option>
         {clusters.map((cluster) => (
           <option key={cluster} value={cluster}>

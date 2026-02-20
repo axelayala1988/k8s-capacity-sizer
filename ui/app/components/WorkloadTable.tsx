@@ -14,6 +14,7 @@ interface WorkloadTableProps {
 type SortField = 'name' | 'namespace' | 'cpuSeverity' | 'memSeverity' | 'overallSeverity';
 type SortDirection = 'asc' | 'desc';
 type SeverityFilter = 'all' | SeverityLevel;
+type StatusFilter = 'all' | 'no-config' | 'over-provisioned' | 'under-provisioned' | 'optimal';
 
 const SEVERITY_ORDER = { red: 0, yellow: 1, green: 2, gray: 3 };
 const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
@@ -40,8 +41,10 @@ export const WorkloadTable: React.FC<WorkloadTableProps> = ({
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [searchQuery, setSearchQuery] = useState('');
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [pageSize, setPageSize] = useState<number>(25);
   const [currentPage, setCurrentPage] = useState(0);
+  const [showDynatraceNamespace, setShowDynatraceNamespace] = useState(false);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -56,6 +59,11 @@ export const WorkloadTable: React.FC<WorkloadTableProps> = ({
   const filtered = useMemo(() => {
     let result = workloads;
 
+    // Hide dynatrace namespace by default
+    if (!showDynatraceNamespace) {
+      result = result.filter((w) => w.namespace !== 'dynatrace');
+    }
+
     // Text search (workload name or namespace)
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
@@ -64,13 +72,31 @@ export const WorkloadTable: React.FC<WorkloadTableProps> = ({
       );
     }
 
+    // Status filter (No Limits, Over/Under-Provisioned, Optimal)
+    if (statusFilter !== 'all') {
+      switch (statusFilter) {
+        case 'no-config':
+          result = result.filter((w) => w.isBestEffortQoS && (w.cpuPeak > 0 || w.memoryPeak > 0));
+          break;
+        case 'over-provisioned':
+          result = result.filter((w) => w.overallStatus === 'over-provisioned');
+          break;
+        case 'under-provisioned':
+          result = result.filter((w) => w.overallStatus === 'under-provisioned' || w.overallStatus === 'misconfigured');
+          break;
+        case 'optimal':
+          result = result.filter((w) => w.overallStatus === 'optimal');
+          break;
+      }
+    }
+
     // Severity filter
     if (severityFilter !== 'all') {
       result = result.filter((w) => w.overallSeverity === severityFilter);
     }
 
     return result;
-  }, [workloads, searchQuery, severityFilter]);
+  }, [workloads, searchQuery, statusFilter, severityFilter, showDynatraceNamespace]);
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -113,6 +139,12 @@ export const WorkloadTable: React.FC<WorkloadTableProps> = ({
   };
   const handleSeverityChange = (value: SeverityFilter) => {
     setSeverityFilter(value);
+    setStatusFilter('all'); // Clear status filter when changing severity
+    setCurrentPage(0);
+  };
+  const handleStatusChange = (value: StatusFilter) => {
+    setStatusFilter(value);
+    setSeverityFilter('all'); // Clear severity filter when changing status
     setCurrentPage(0);
   };
   const handlePageSizeChange = (size: number) => {
@@ -124,6 +156,25 @@ export const WorkloadTable: React.FC<WorkloadTableProps> = ({
   const severityCounts = useMemo(() => {
     const counts = { red: 0, yellow: 0, green: 0, gray: 0 };
     workloads.forEach((w) => { counts[w.overallSeverity]++; });
+    return counts;
+  }, [workloads]);
+
+  // Status counts for filter badges
+  const statusCounts = useMemo(() => {
+    const counts = {
+      noConfig: 0,
+      overProvisioned: 0,
+      underProvisioned: 0,
+      optimal: 0,
+    };
+    workloads.forEach((w) => {
+      if (w.isBestEffortQoS && (w.cpuPeak > 0 || w.memoryPeak > 0)) {
+        counts.noConfig++;
+      }
+      if (w.overallStatus === 'over-provisioned') counts.overProvisioned++;
+      if (w.overallStatus === 'under-provisioned' || w.overallStatus === 'misconfigured') counts.underProvisioned++;
+      if (w.overallStatus === 'optimal') counts.optimal++;
+    });
     return counts;
   }, [workloads]);
 
@@ -174,7 +225,7 @@ export const WorkloadTable: React.FC<WorkloadTableProps> = ({
         overflow: 'hidden',
       }}
     >
-      {/* Toolbar: Search + Severity Filter */}
+      {/* Toolbar: Search + Severity Filter + Dynatrace Namespace Toggle */}
       <div
         style={{
           padding: '10px 12px',
@@ -206,40 +257,99 @@ export const WorkloadTable: React.FC<WorkloadTableProps> = ({
           }}
         />
 
-        {/* Severity Filter */}
-        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <Text style={{ fontSize: '11px', color: '#b4b4be', marginRight: '4px' }}>Show:</Text>
-          <button
-            onClick={() => handleSeverityChange('all')}
-            style={filterButtonStyle(severityFilter === 'all', '#f0f0f5')}
-          >
-            All ({workloads.length})
-          </button>
-          <button
-            onClick={() => handleSeverityChange('red')}
-            style={filterButtonStyle(severityFilter === 'red', '#ee3d48')}
-          >
-            Red ({severityCounts.red})
-          </button>
-          <button
-            onClick={() => handleSeverityChange('yellow')}
-            style={filterButtonStyle(severityFilter === 'yellow', '#ff9800')}
-          >
-            Yellow ({severityCounts.yellow})
-          </button>
-          <button
-            onClick={() => handleSeverityChange('green')}
-            style={filterButtonStyle(severityFilter === 'green', '#4caf50')}
-          >
-            Green ({severityCounts.green})
-          </button>
-          <button
-            onClick={() => handleSeverityChange('gray')}
-            style={filterButtonStyle(severityFilter === 'gray', '#b4b4be')}
-          >
-            Gray ({severityCounts.gray})
-          </button>
+        {/* Filter Controls */}
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Status Filter */}
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <Text style={{ fontSize: '11px', color: '#b4b4be', marginRight: '4px' }}>Show:</Text>
+            <button
+              onClick={() => handleStatusChange('all')}
+              style={filterButtonStyle(statusFilter === 'all' && severityFilter === 'all', '#f0f0f5')}
+            >
+              All ({workloads.length})
+            </button>
+            <button
+              onClick={() => handleStatusChange('no-config')}
+              style={filterButtonStyle(statusFilter === 'no-config', '#ee3d48')}
+            >
+              No Limits ({statusCounts.noConfig})
+            </button>
+            <button
+              onClick={() => handleStatusChange('over-provisioned')}
+              style={filterButtonStyle(statusFilter === 'over-provisioned', '#ff9800')}
+            >
+              Over-Provisioned ({statusCounts.overProvisioned})
+            </button>
+            <button
+              onClick={() => handleStatusChange('under-provisioned')}
+              style={filterButtonStyle(statusFilter === 'under-provisioned', '#ee3d48')}
+            >
+              Under-Provisioned ({statusCounts.underProvisioned})
+            </button>
+            <button
+              onClick={() => handleStatusChange('optimal')}
+              style={filterButtonStyle(statusFilter === 'optimal', '#4caf50')}
+            >
+              Optimal ({statusCounts.optimal})
+            </button>
+          </div>
+
+          {/* Separator */}
+          <span style={{ color: '#3d3f5c', fontSize: '18px' }}>|</span>
+
+          {/* Severity Filter */}
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <Text style={{ fontSize: '11px', color: '#b4b4be', marginRight: '4px' }}>Severity:</Text>
+            <button
+              onClick={() => handleSeverityChange('red')}
+              style={filterButtonStyle(severityFilter === 'red', '#ee3d48')}
+            >
+              Red ({severityCounts.red})
+            </button>
+            <button
+              onClick={() => handleSeverityChange('yellow')}
+              style={filterButtonStyle(severityFilter === 'yellow', '#ff9800')}
+            >
+              Yellow ({severityCounts.yellow})
+            </button>
+            <button
+              onClick={() => handleSeverityChange('green')}
+              style={filterButtonStyle(severityFilter === 'green', '#4caf50')}
+            >
+              Green ({severityCounts.green})
+            </button>
+            <button
+              onClick={() => handleSeverityChange('gray')}
+              style={filterButtonStyle(severityFilter === 'gray', '#b4b4be')}
+            >
+              Gray ({severityCounts.gray})
+            </button>
+          </div>
         </div>
+
+        {/* Dynatrace Namespace Toggle */}
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            fontSize: '11px',
+            color: '#b4b4be',
+            cursor: 'pointer',
+            userSelect: 'none',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={showDynatraceNamespace}
+            onChange={(e) => setShowDynatraceNamespace(e.target.checked)}
+            style={{
+              cursor: 'pointer',
+              accentColor: '#3d8bfd',
+            }}
+          />
+          Show Dynatrace workloads
+        </label>
       </div>
 
       <div style={{ overflowX: 'auto' }}>
@@ -274,7 +384,7 @@ export const WorkloadTable: React.FC<WorkloadTableProps> = ({
         {paginatedRows.length === 0 ? (
           <Flex justifyContent="center" style={{ padding: '24px' }}>
             <Text style={{ color: '#b4b4be', fontSize: '13px' }}>
-              No workloads match your search{severityFilter !== 'all' ? ` and severity filter` : ''}.
+              No workloads match your search{statusFilter !== 'all' || severityFilter !== 'all' ? ` and filters` : ''}.
             </Text>
           </Flex>
         ) : (
@@ -361,13 +471,23 @@ export const WorkloadTable: React.FC<WorkloadTableProps> = ({
         }}
       >
         {/* Left: count info */}
-        <Text style={{ fontSize: '11px', color: '#b4b4be' }}>
-          {filtered.length === workloads.length
-            ? `${workloads.length} workload${workloads.length !== 1 ? 's' : ''}`
-            : `${filtered.length} of ${workloads.length} workloads (filtered)`}
-          {' | '}
-          Showing {paginatedRows.length > 0 ? safeCurrentPage * pageSize + 1 : 0}-{Math.min((safeCurrentPage + 1) * pageSize, filtered.length)}
-        </Text>
+        <div>
+          <Text style={{ fontSize: '11px', color: '#b4b4be' }}>
+            {filtered.length === workloads.length
+              ? `${workloads.length} workload${workloads.length !== 1 ? 's' : ''}`
+              : `${filtered.length} of ${workloads.length} workloads (filtered)`}
+            {' | '}
+            Showing {paginatedRows.length > 0 ? safeCurrentPage * pageSize + 1 : 0}-{Math.min((safeCurrentPage + 1) * pageSize, filtered.length)}
+          </Text>
+          {(() => {
+            const noConfigCount = filtered.filter(w => w.isBestEffortQoS && (w.cpuPeak > 0 || w.memoryPeak > 0)).length;
+            return noConfigCount > 0 ? (
+              <Text style={{ fontSize: '10px', color: '#ee3d48', marginTop: '4px' }}>
+                ⚠️ {noConfigCount} workload{noConfigCount !== 1 ? 's' : ''} running without resource limits (pods will be evicted first under pressure)
+              </Text>
+            ) : null;
+          })()}
+        </div>
 
         {/* Right: page controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

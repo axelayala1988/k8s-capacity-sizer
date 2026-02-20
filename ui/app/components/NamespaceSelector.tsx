@@ -6,6 +6,7 @@ interface NamespaceSelectorProps {
   selected: string;
   onChange: (ns: string) => void;
   loading: boolean;
+  clusterSelected: boolean;
 }
 
 export const NamespaceSelector: React.FC<NamespaceSelectorProps> = ({
@@ -13,6 +14,7 @@ export const NamespaceSelector: React.FC<NamespaceSelectorProps> = ({
   selected,
   onChange,
   loading,
+  clusterSelected,
 }) => {
   return (
     <Flex alignItems="center" gap={8}>
@@ -20,7 +22,7 @@ export const NamespaceSelector: React.FC<NamespaceSelectorProps> = ({
       <select
         value={selected}
         onChange={(e) => onChange(e.target.value)}
-        disabled={loading}
+        disabled={loading || !clusterSelected}
         style={{
           backgroundColor: '#25273d',
           color: '#f0f0f5',
@@ -28,12 +30,19 @@ export const NamespaceSelector: React.FC<NamespaceSelectorProps> = ({
           borderRadius: '4px',
           padding: '6px 12px',
           fontSize: '13px',
-          cursor: loading ? 'wait' : 'pointer',
+          cursor: loading ? 'wait' : !clusterSelected ? 'not-allowed' : 'pointer',
           minWidth: '200px',
           outline: 'none',
         }}
       >
-        <option value="all">All namespaces</option>
+        {selected === '' && (
+          <option value="" disabled>
+            {!clusterSelected ? 'Select cluster first' : loading ? 'Loading namespaces...' : 'Select a namespace'}
+          </option>
+        )}
+        <option value="all" disabled={!clusterSelected}>
+          {clusterSelected ? 'All namespaces' : 'All namespaces (select cluster first)'}
+        </option>
         {namespaces.map((ns) => (
           <option key={ns} value={ns}>
             {ns}

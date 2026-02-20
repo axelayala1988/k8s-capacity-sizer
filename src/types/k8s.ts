@@ -76,6 +76,7 @@ export interface CapacitySummary {
   overProvisionedCount: number;
   underProvisionedCount: number;
   noDataCount: number;
+  noConfigCount: number; // Workloads with usage data but no requests/limits (BestEffort QoS)
   estimatedCpuWasteMilli: number;
   estimatedMemoryWasteBytes: number;
 }

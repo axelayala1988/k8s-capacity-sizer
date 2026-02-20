@@ -1,14 +1,18 @@
 {
-  "environmentUrl": "https://yhu28601.apps.dynatrace.com",
+  "environmentUrl": "https://nic55601.apps.dynatrace.com",
   "app": {
     "id": "my.k8s.capacity.sizer",
     "name": "K8s Capacity Sizer",
-    "version": "1.11.0",
+    "version": "1.11.1",
     "description": "Right-size K8s workloads: requests/limits vs actual usage",
     "scopes": [
       {
         "name": "storage:metrics:read",
         "comment": "Read Kubernetes container metrics from Grail"
+      },
+      {
+        "name": "storage:buckets:read",
+        "comment": "Read access to Grail storage buckets for metrics table"
       },
       {
         "name": "storage:entities:read",

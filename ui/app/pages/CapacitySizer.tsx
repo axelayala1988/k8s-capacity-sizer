@@ -69,6 +69,7 @@ const CapacitySizer: React.FC = () => {
               selected={selectedNamespace}
               onChange={setSelectedNamespace}
               loading={loadingFilters}
+              clusterSelected={!!selectedCluster && selectedCluster !== 'all'}
             />
             <TimeRangeSelector selected={timeRange} onChange={setTimeRange} />
           </Flex>

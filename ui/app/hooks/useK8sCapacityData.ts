@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
-import { queryGrail, queryWorkloadMetrics } from '../utils/appFunctions';
+import { useState, useCallback, useEffect } from 'react';
+import { queryGrail, queryWorkloadMetricsGrail } from '../utils/appFunctions';
 import { analyzeWorkload, calculateSummary } from '../utils/recommendations';
 import type { WorkloadCapacityData, CapacitySummary, UseK8sCapacityDataReturn } from '../../../src/types/k8s';
 
@@ -7,14 +7,20 @@ import type { WorkloadCapacityData, CapacitySummary, UseK8sCapacityDataReturn } 
 // Entity Query Builders (DQL — these work reliably via Grail)
 // ============================================================================
 
-function buildClustersQuery(timeRange: string): string {
-  return `fetch dt.entity.kubernetes_cluster, from:${timeRange}
+function buildClustersQuery(): string {
+  return `fetch dt.entity.kubernetes_cluster
 | fieldsKeep id, entity.name
 | sort entity.name asc`;
 }
 
-function buildNamespacesQuery(timeRange: string): string {
-  return `fetch dt.entity.cloud_application_namespace, from:${timeRange}
+function buildNamespacesQuery(clusterId?: string): string {
+  if (clusterId) {
+    return `fetch dt.entity.cloud_application_namespace
+| filter clustered_by[dt.entity.kubernetes_cluster] == "${clusterId}"
+| fieldsKeep entity.name
+| sort entity.name asc`;
+  }
+  return `fetch dt.entity.cloud_application_namespace
 | fieldsKeep entity.name
 | sort entity.name asc`;
 }
@@ -25,7 +31,7 @@ function buildNamespacesQuery(timeRange: string): string {
 
 const EMPTY_SUMMARY: CapacitySummary = {
   totalWorkloads: 0, optimalCount: 0, overProvisionedCount: 0,
-  underProvisionedCount: 0, noDataCount: 0,
+  underProvisionedCount: 0, noDataCount: 0, noConfigCount: 0,
   estimatedCpuWasteMilli: 0, estimatedMemoryWasteBytes: 0,
 };
 
@@ -35,13 +41,13 @@ const EMPTY_SUMMARY: CapacitySummary = {
 
 export function useK8sCapacityData(): UseK8sCapacityDataReturn {
   const [clusters, setClusters] = useState<string[]>([]);
-  const [allNamespaces, setAllNamespaces] = useState<string[]>([]);
-  const [clusterNamespaceMap, setClusterNamespaceMap] = useState<Record<string, string[]>>({});
+  const [clusterIdMap, setClusterIdMap] = useState<Record<string, string>>({}); // name -> id
+  const [namespaces, setNamespaces] = useState<string[]>([]);
   const [workloads, setWorkloads] = useState<WorkloadCapacityData[]>([]);
   const [summary, setSummary] = useState<CapacitySummary>(EMPTY_SUMMARY);
 
-  const [selectedCluster, setSelectedClusterState] = useState<string>('all');
-  const [selectedNamespace, setSelectedNamespace] = useState<string>('all');
+  const [selectedCluster, setSelectedClusterState] = useState<string>('');
+  const [selectedNamespace, setSelectedNamespace] = useState<string>('');
   const [timeRange, setTimeRange] = useState<string>('now()-24h');
 
   const [loading, setLoading] = useState(false);
@@ -49,76 +55,89 @@ export function useK8sCapacityData(): UseK8sCapacityDataReturn {
   const [error, setError] = useState<string | null>(null);
   const [selectedWorkload, setSelectedWorkload] = useState<string | null>(null);
 
-  // Derive visible namespaces based on selected cluster
-  const namespaces = useMemo(() => {
-    if (selectedCluster === 'all') return allNamespaces;
-    const clusterNs = clusterNamespaceMap[selectedCluster];
-    if (!clusterNs || clusterNs.length === 0) return allNamespaces;
-    return allNamespaces.filter(ns => clusterNs.includes(ns));
-  }, [allNamespaces, selectedCluster, clusterNamespaceMap]);
-
-  // ── Load filter options (clusters + namespaces via entity queries) ────
-  const loadFilters = useCallback(async () => {
-    setLoadingFilters(true);
+  // ── Load clusters ────
+  const loadClusters = useCallback(async () => {
     try {
-      const [clustersResult, nsResult] = await Promise.all([
-        queryGrail(buildClustersQuery(timeRange)),
-        queryGrail(buildNamespacesQuery(timeRange)),
-      ]);
+      const clustersResult = await queryGrail(buildClustersQuery());
 
       if (clustersResult.success) {
         const clusterList: string[] = [];
+        const idMap: Record<string, string> = {};
+
         for (const r of clustersResult.data) {
+          const id = (r as any)['id'] as string;
           const name = (r as any)['entity.name'] as string;
-          if (name) clusterList.push(name);
+          if (name && id) {
+            clusterList.push(name);
+            idMap[name] = id;
+          }
         }
+
         setClusters(clusterList);
+        setClusterIdMap(idMap);
       }
+    } catch (err) {
+      console.error('Error loading clusters:', err);
+      setError('Failed to load clusters: ' + String(err));
+    }
+  }, []);
+
+  // ── Load namespaces for selected cluster ────
+  const loadNamespaces = useCallback(async (clusterName: string) => {
+    setLoadingFilters(true);
+    try {
+      const clusterId = clusterIdMap[clusterName];
+      const nsResult = await queryGrail(buildNamespacesQuery(clusterId));
 
       if (nsResult.success && nsResult.data.length > 0) {
         const nsNames = nsResult.data
           .map((r: any) => r['entity.name'] as string)
           .filter(Boolean);
-        setAllNamespaces(Array.from(new Set(nsNames)).sort());
+        setNamespaces(Array.from(new Set(nsNames)).sort());
+      } else {
+        setNamespaces([]);
       }
-
-      // Reset cluster-namespace map (entity model doesn't easily provide this mapping)
-      setClusterNamespaceMap({});
     } catch (err) {
-      console.error('Error loading filters:', err);
-      setError('Failed to load filters: ' + String(err));
+      console.error('Error loading namespaces:', err);
+      setError('Failed to load namespaces: ' + String(err));
     } finally {
       setLoadingFilters(false);
     }
-  }, [timeRange]);
+  }, [clusterIdMap]);
 
   const setSelectedCluster = useCallback((cluster: string) => {
     setSelectedClusterState(cluster);
-    setSelectedNamespace('all');
-  }, []);
+    // Reset namespace selection when cluster changes
+    setSelectedNamespace('');
+    // Load namespaces for the selected cluster
+    if (cluster) {
+      loadNamespaces(cluster);
+    }
+  }, [loadNamespaces]);
 
-  // ── Load workload data via classic Metrics API v2 ─────────────────────
+  // ── Load workload data via Grail timeseries queries ─────────────────────
   const loadWorkloadData = useCallback(async () => {
     setLoading(true);
     setSelectedWorkload(null);
     setError(null);
 
     try {
-      // Determine namespace filter
+      // Determine cluster and namespace filters
+      let clusterParam: string | undefined;
       let nsParam: string | undefined;
-      let nsListParam: string[] | undefined;
 
-      if (selectedNamespace !== 'all') {
-        nsParam = selectedNamespace;
-      } else if (selectedCluster !== 'all') {
-        const clusterNs = clusterNamespaceMap[selectedCluster];
-        if (clusterNs && clusterNs.length > 0) nsListParam = clusterNs;
+      if (selectedCluster && selectedCluster !== 'all') {
+        clusterParam = selectedCluster;
       }
 
-      const result = await queryWorkloadMetrics({
+      if (selectedNamespace && selectedNamespace !== 'all') {
+        nsParam = selectedNamespace;
+      }
+
+      const result = await queryWorkloadMetricsGrail({
         from: timeRange,
+        cluster: clusterParam,
         namespace: nsParam,
-        namespaces: nsListParam,
       });
 
       // Build diagnostic info for display
@@ -196,21 +215,35 @@ export function useK8sCapacityData(): UseK8sCapacityDataReturn {
     } finally {
       setLoading(false);
     }
-  }, [selectedNamespace, selectedCluster, timeRange, clusterNamespaceMap]);
+  }, [selectedNamespace, selectedCluster, timeRange]);
 
   const refetch = useCallback(() => {
-    loadFilters();
-  }, [loadFilters]);
+    loadClusters();
+    if (selectedCluster) {
+      loadNamespaces(selectedCluster);
+    }
+  }, [loadClusters, loadNamespaces, selectedCluster]);
 
-  // Load filters on mount and when timeRange changes
+  // Load clusters on mount
   useEffect(() => {
-    loadFilters();
-  }, [loadFilters]);
+    loadClusters();
+  }, [loadClusters]);
+
+  // Load namespaces when cluster changes
+  useEffect(() => {
+    if (selectedCluster) {
+      loadNamespaces(selectedCluster);
+    } else {
+      setNamespaces([]);
+    }
+  }, [selectedCluster, loadNamespaces]);
 
   // Load workload data when filters change
   useEffect(() => {
-    loadWorkloadData();
-  }, [loadWorkloadData]);
+    if (selectedCluster && selectedNamespace) {
+      loadWorkloadData();
+    }
+  }, [selectedCluster, selectedNamespace, loadWorkloadData]);
 
   return {
     clusters,

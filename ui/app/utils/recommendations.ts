@@ -396,10 +396,16 @@ export function calculateSummary(workloads: WorkloadCapacityData[]): CapacitySum
   let overProvisionedCount = 0;
   let underProvisionedCount = 0;
   let noDataCount = 0;
+  let noConfigCount = 0;
   let estimatedCpuWasteMilli = 0;
   let estimatedMemoryWasteBytes = 0;
 
   for (const w of workloads) {
+    // Count workloads with BestEffort QoS (no configs) that have usage data
+    if (w.isBestEffortQoS && (w.cpuPeak > 0 || w.memoryPeak > 0)) {
+      noConfigCount++;
+    }
+
     switch (w.overallStatus) {
       case 'optimal':
         optimalCount++;
@@ -439,6 +445,7 @@ export function calculateSummary(workloads: WorkloadCapacityData[]): CapacitySum
     overProvisionedCount,
     underProvisionedCount,
     noDataCount,
+    noConfigCount,
     estimatedCpuWasteMilli: Math.max(0, estimatedCpuWasteMilli),
     estimatedMemoryWasteBytes: Math.max(0, estimatedMemoryWasteBytes),
   };
