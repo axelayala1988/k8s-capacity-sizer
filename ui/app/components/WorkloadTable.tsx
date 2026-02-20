@@ -31,6 +31,18 @@ const filterButtonStyle = (active: boolean, color: string): React.CSSProperties 
   whiteSpace: 'nowrap',
 });
 
+// Helper to format recommendation value - show ✓ for optimal, N/A for no data
+const formatRecommendationValue = (
+  suggestedValue: number | null,
+  status: string,
+  formatter: (val: number | null) => string
+): string => {
+  if (suggestedValue === null && status === 'optimal') {
+    return '✓';
+  }
+  return formatter(suggestedValue);
+};
+
 export const WorkloadTable: React.FC<WorkloadTableProps> = ({
   workloads,
   selectedWorkload,
@@ -443,10 +455,10 @@ export const WorkloadTable: React.FC<WorkloadTableProps> = ({
                   {formatMemory(w.memoryMedian)} / {formatMemory(w.memoryPeak)}
                 </div>
                 <div style={{ ...cellStyle, fontFamily: 'monospace', fontSize: '12px', color: '#3d8bfd' }}>
-                  {formatCpu(w.cpuRequestRecommendation.suggestedValue)} / {formatCpu(w.cpuLimitRecommendation.suggestedValue)}
+                  {formatRecommendationValue(w.cpuRequestRecommendation.suggestedValue, w.cpuRequestRecommendation.status, formatCpu)} / {formatRecommendationValue(w.cpuLimitRecommendation.suggestedValue, w.cpuLimitRecommendation.status, formatCpu)}
                 </div>
                 <div style={{ ...cellStyle, fontFamily: 'monospace', fontSize: '12px', color: '#3d8bfd' }}>
-                  {formatMemory(w.memoryRequestRecommendation.suggestedValue)} / {formatMemory(w.memoryLimitRecommendation.suggestedValue)}
+                  {formatRecommendationValue(w.memoryRequestRecommendation.suggestedValue, w.memoryRequestRecommendation.status, formatMemory)} / {formatRecommendationValue(w.memoryLimitRecommendation.suggestedValue, w.memoryLimitRecommendation.status, formatMemory)}
                 </div>
                 <div style={{ ...cellStyle, display: 'flex', alignItems: 'center' }}>
                   <RecommendationBadge severity={w.overallSeverity} status={w.overallStatus} compact />

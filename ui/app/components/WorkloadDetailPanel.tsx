@@ -17,14 +17,15 @@ const SEVERITY_COLORS = {
   gray: '#b4b4be',
 };
 
-const RecMessage: React.FC<{ rec: Recommendation }> = ({ rec }) => {
+const RecListItem: React.FC<{ rec: Recommendation }> = ({ rec }) => {
   const color = SEVERITY_COLORS[rec.severity];
-  const dot = rec.severity === 'green' ? '+' : rec.severity === 'yellow' ? '!' : rec.severity === 'red' ? 'x' : '?';
   return (
-    <Flex gap={8} alignItems="flex-start" style={{ marginBottom: '6px' }}>
-      <span style={{ color, fontWeight: 'bold', fontSize: '14px', minWidth: '16px' }}>{dot}</span>
-      <Text style={{ fontSize: '13px', color: '#f0f0f5', lineHeight: '1.5' }}>{rec.message}</Text>
-    </Flex>
+    <li style={{ color: '#f0f0f5', fontSize: '13px', lineHeight: '1.6', marginBottom: '8px' }}>
+      <span style={{ color, fontWeight: 'bold' }}>
+        {rec.severity === 'red' ? '🔴' : rec.severity === 'yellow' ? '🟡' : rec.severity === 'green' ? '🟢' : '⚪'}
+      </span>{' '}
+      {rec.message}
+    </li>
   );
 };
 
@@ -204,10 +205,12 @@ export const WorkloadDetailPanel: React.FC<WorkloadDetailPanelProps> = ({ worklo
         <Text style={{ fontSize: '14px', color: '#f0f0f5', fontWeight: 600, marginBottom: '8px' }}>
           Recommendations
         </Text>
-        <RecMessage rec={w.cpuRequestRecommendation} />
-        <RecMessage rec={w.cpuLimitRecommendation} />
-        <RecMessage rec={w.memoryRequestRecommendation} />
-        <RecMessage rec={w.memoryLimitRecommendation} />
+        <ul style={{ margin: 0, paddingLeft: '20px', listStyleType: 'none' }}>
+          <RecListItem rec={w.cpuRequestRecommendation} />
+          <RecListItem rec={w.cpuLimitRecommendation} />
+          <RecListItem rec={w.memoryRequestRecommendation} />
+          <RecListItem rec={w.memoryLimitRecommendation} />
+        </ul>
 
         {w.isBursty && (
           <Flex gap={8} alignItems="flex-start" style={{ marginTop: '8px', padding: '8px 12px', backgroundColor: '#ff980010', borderRadius: '4px', border: '1px solid #ff980030' }}>

@@ -130,7 +130,7 @@ export function evaluateRequest(
     return {
       status: 'optimal',
       severity: 'green',
-      message: `Well-sized — peak usage is ${Math.round(ratio * 100)}% of request.`,
+      message: `${label} request well-sized — peak usage is ${Math.round(ratio * 100)}% of request.`,
       ratio,
       suggestedValue: null,
     };
@@ -140,7 +140,7 @@ export function evaluateRequest(
   return {
     status: 'optimal',
     severity: 'green',
-    message: `Tightly sized — peak usage is ${Math.round(ratio * 100)}% of request. Monitor for growth.`,
+    message: `${label} request tightly sized — peak usage is ${Math.round(ratio * 100)}% of request. Monitor for growth.`,
     ratio,
     suggestedValue: null,
   };
@@ -240,7 +240,7 @@ export function evaluateLimit(
     return {
       status: 'optimal',
       severity: 'green',
-      message: `Well-sized — peak usage is ${Math.round(ratio * 100)}% of limit. Good headroom for bursts.`,
+      message: `${label} limit well-sized — peak usage is ${Math.round(ratio * 100)}% of limit. Good headroom for bursts.`,
       ratio,
       suggestedValue: null,
     };
